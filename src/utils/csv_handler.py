@@ -5,17 +5,25 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def write_to_csv(summary_data, output_dir="output"):
+def write_to_csv(summary_data, output_dir="output", detailed=False):
     """
     Write port profile summary to CSV file
     
     Args:
         summary_data (list): List of dictionaries containing host results
         output_dir (str): Output directory path
+        detailed (bool): If True, include all interface details
     
     Returns:
         str: Path to the generated CSV file
     """
+    if detailed:
+        return write_detailed_csv(summary_data, output_dir)
+    else:
+        return write_summary_csv(summary_data, output_dir)
+
+def write_summary_csv(summary_data, output_dir):
+    """Write profile-focused summary CSV"""
     try:
         # Ensure output directory exists
         output_path = Path(output_dir)
@@ -26,7 +34,7 @@ def write_to_csv(summary_data, output_dir="output"):
         csv_filename = f"port_profiles_summary_{timestamp}.csv"
         csv_filepath = output_path / csv_filename
         
-        # Flatten the data for CSV export
+        # Create profile-focused summary
         csv_data = []
         
         for entry in summary_data:
@@ -36,15 +44,49 @@ def write_to_csv(summary_data, output_dir="output"):
             port_profiles = entry.get('port_profiles', {})
             
             if status == "Success" and port_profiles:
-                # If we have port profile data, create rows for each interface
-                for interface, profile_info in port_profiles.items():
+                # Group interfaces by profile
+                profile_summary = {}
+                
+                for key, profile_info in port_profiles.items():
+                    profile_name = profile_info.get('profile', 'N/A')
+                    
+                    if key.startswith('UNUSED_'):
+                        # Unused profile
+                        profile_summary[profile_name] = {
+                            'status': 'Unused',
+                            'interface_count': 0,
+                            'interfaces': 'None'
+                        }
+                    else:
+                        # Applied profile
+                        if profile_name not in profile_summary:
+                            profile_summary[profile_name] = {
+                                'status': 'Applied',
+                                'interface_count': 0,
+                                'interfaces': []
+                            }
+                        profile_summary[profile_name]['interface_count'] += 1
+                        profile_summary[profile_name]['interfaces'].append(key)
+                
+                # Create CSV rows for each profile
+                for profile_name, profile_data in profile_summary.items():
+                    if profile_data['status'] == 'Applied':
+                        # Format interface list (first few interfaces + count)
+                        interfaces = profile_data['interfaces']
+                        if len(interfaces) <= 3:
+                            interface_list = ', '.join(interfaces)
+                        else:
+                            interface_list = f"{', '.join(interfaces[:3])} ... (+{len(interfaces)-3} more)"
+                    else:
+                        interface_list = 'None'
+                    
                     csv_data.append({
                         'Host': host,
                         'Status': status,
-                        'Interface': interface,
-                        'Port_Profile': profile_info.get('profile', 'N/A'),
-                        'VLAN': profile_info.get('vlan', 'N/A'),
-                        'Description': profile_info.get('description', 'N/A'),
+                        'Port_Profile': profile_name,
+                        'Profile_Status': profile_data['status'],
+                        'Interface_Count': profile_data['interface_count'],
+                        'Sample_Interfaces': interface_list,
                         'Error': ''
                     })
             else:
@@ -52,10 +94,10 @@ def write_to_csv(summary_data, output_dir="output"):
                 csv_data.append({
                     'Host': host,
                     'Status': status,
-                    'Interface': 'N/A',
                     'Port_Profile': 'N/A',
-                    'VLAN': 'N/A',
-                    'Description': 'N/A',
+                    'Profile_Status': 'N/A',
+                    'Interface_Count': 0,
+                    'Sample_Interfaces': 'N/A',
                     'Error': error
                 })
         
@@ -71,3 +113,8 @@ def write_to_csv(summary_data, output_dir="output"):
     except Exception as e:
         logger.error(f"Error writing CSV file: {str(e)}")
         raise
+
+def write_detailed_csv(summary_data, output_dir):
+    """Write interface-level detailed CSV"""
+    # Placeholder for detailed CSV writing logic
+    pass
