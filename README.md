@@ -186,5 +186,3 @@ tail -f logs/nxos_checker.log
 5. Submit a pull request
 
 ## License
-
-[Add your license information here]
